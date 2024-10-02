@@ -63,7 +63,7 @@ ID3D11ComputeShader* Upscaling::GetRCASComputeShader()
 ID3D11ComputeShader* Upscaling::GetEncodeMaskComputeShader()
 {
 	if (!encodeMaskCS) {
-		logger::debug("Compiling EncodReactiveMaskCS.hlsl");
+		logger::debug("Compiling EncodeMaskCS.hlsl");
 		encodeMaskCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/EncodeMaskCS.hlsl", "cs_5_0");
 	}
 	return encodeMaskCS;
