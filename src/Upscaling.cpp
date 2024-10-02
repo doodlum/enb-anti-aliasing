@@ -54,7 +54,7 @@ ID3D11ComputeShader* Upscaling::GetRCASComputeShader()
 {
 	if (!rcasCS) {
 		logger::debug("Compiling RCAS.hlsl");
-		rcasCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAAUpgrade/RCAS/RCAS.hlsl", "cs_5_0");
+		rcasCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/RCAS/RCAS.hlsl", "cs_5_0");
 	}
 	return rcasCS;
 }
