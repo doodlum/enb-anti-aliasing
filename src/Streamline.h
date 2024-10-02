@@ -55,13 +55,10 @@ public:
 
 	void LoadInterposer();
 	void Initialize();
-	void PostDevice();
 
 	HRESULT CreateDeviceAndSwapChain(IDXGIAdapter* pAdapter, D3D_DRIVER_TYPE DriverType, HMODULE Software, UINT Flags, const D3D_FEATURE_LEVEL* pFeatureLevels, UINT FeatureLevels, UINT SDKVersion, const DXGI_SWAP_CHAIN_DESC* pSwapChainDesc, IDXGISwapChain** ppSwapChain, ID3D11Device** ppDevice, D3D_FEATURE_LEVEL* pFeatureLevel, ID3D11DeviceContext** ppImmediateContext);
 
-	void SetupResources();
-
-	void Upscale(Texture2D* a_color);
+	void Upscale(Texture2D* a_color, Texture2D* a_mask);
 	void UpdateConstants();
 
 	void DestroyDLSSResources();

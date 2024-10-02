@@ -59,6 +59,16 @@ ID3D11ComputeShader* Upscaling::GetRCASComputeShader()
 	return rcasCS;
 }
 
+
+ID3D11ComputeShader* Upscaling::GetEncodeMaskComputeShader()
+{
+	if (!encodeMaskCS) {
+		logger::debug("Compiling EncodReactiveMaskCS.hlsl");
+		encodeMaskCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/EncodeMaskCS.hlsl", "cs_5_0");
+	}
+	return encodeMaskCS;
+}
+
 static void SetDirtyStates(bool a_computeShader)
 {
 	using func_t = decltype(&SetDirtyStates);
@@ -96,31 +106,56 @@ void Upscaling::Upscale()
 	ID3D11Resource* outputTextureResource;
 	outputTextureRTV->GetResource(&outputTextureResource);
 
-	context->CopyResource(upscalingTempTexture->resource.get(), inputTextureResource);
+	context->CopyResource(upscalingTexture->resource.get(), inputTextureResource);
+
+	static auto gameViewport = RE::BSGraphics::State::GetSingleton();
+	uint dispatchX = (uint)std::ceil((float)gameViewport->screenWidth / 8.0f);
+	uint dispatchY = (uint)std::ceil((float)gameViewport->screenHeight / 8.0f);
+
+	{	
+		static auto& temporalAAMask = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kTEMPORAL_AA_MASK];
+
+		{
+			ID3D11ShaderResourceView* views[1] = { temporalAAMask.SRV };
+			context->CSSetShaderResources(0, ARRAYSIZE(views), views);
+
+			ID3D11UnorderedAccessView* uavs[1] = { maskTexture->uav.get() };
+			context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, nullptr);
+
+			context->CSSetShader(GetEncodeMaskComputeShader(), nullptr, 0);
+
+			context->Dispatch(dispatchX, dispatchY, 1);
+		}
+
+		ID3D11ShaderResourceView* views[1] = { nullptr };
+		context->CSSetShaderResources(0, ARRAYSIZE(views), views);
+
+		ID3D11UnorderedAccessView* uavs[1] = { nullptr };
+		context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, nullptr);
+
+		ID3D11ComputeShader* shader = nullptr;
+		context->CSSetShader(shader, nullptr, 0);
+	}
 
 	auto upscaleMode = GetUpscaleMode();
 
 	if (upscaleMode == UpscaleMode::kDLSS)
-		Streamline::GetSingleton()->Upscale(upscalingTempTexture);
+		Streamline::GetSingleton()->Upscale(upscalingTexture, maskTexture);
 	else
-		FidelityFX::GetSingleton()->Upscale(upscalingTempTexture);
+		FidelityFX::GetSingleton()->Upscale(upscalingTexture, maskTexture);
 
 	if (GetUpscaleMode() != UpscaleMode::kFSR) {
-		context->CopyResource(inputTextureResource, upscalingTempTexture->resource.get());
+		context->CopyResource(inputTextureResource, upscalingTexture->resource.get());
 
 		{
 			{
 				ID3D11ShaderResourceView* views[1] = { inputTextureSRV };
 				context->CSSetShaderResources(0, ARRAYSIZE(views), views);
 
-				ID3D11UnorderedAccessView* uavs[1] = { upscalingTempTexture->uav.get() };
+				ID3D11UnorderedAccessView* uavs[1] = { upscalingTexture->uav.get() };
 				context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, nullptr);
 
 				context->CSSetShader(GetRCASComputeShader(), nullptr, 0);
-
-				static auto gameViewport = RE::BSGraphics::State::GetSingleton();
-				uint dispatchX = (uint)std::ceil((float)gameViewport->screenWidth / 8.0f);
-				uint dispatchY = (uint)std::ceil((float)gameViewport->screenHeight / 8.0f);
 
 				context->Dispatch(dispatchX, dispatchY, 1);
 			}
@@ -136,7 +171,7 @@ void Upscaling::Upscale()
 		}
 	}
 
-	context->CopyResource(outputTextureResource, upscalingTempTexture->resource.get());
+	context->CopyResource(outputTextureResource, upscalingTexture->resource.get());
 }
 
 void Upscaling::CreateUpscalingResources()
@@ -163,15 +198,28 @@ void Upscaling::CreateUpscalingResources()
 
 	texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
-	upscalingTempTexture = new Texture2D(texDesc);
-	upscalingTempTexture->CreateSRV(srvDesc);
-	upscalingTempTexture->CreateUAV(uavDesc);
+	upscalingTexture = new Texture2D(texDesc);
+	upscalingTexture->CreateSRV(srvDesc);
+	upscalingTexture->CreateUAV(uavDesc);
+
+	texDesc.Format = DXGI_FORMAT_R8_UNORM;
+	srvDesc.Format = texDesc.Format;
+	uavDesc.Format = texDesc.Format;
+
+	maskTexture = new Texture2D(texDesc);
+	maskTexture->CreateSRV(srvDesc);
+	maskTexture->CreateUAV(uavDesc);
 }
 
 void Upscaling::DestroyUpscalingResources()
 {
-	upscalingTempTexture->srv = nullptr;
-	upscalingTempTexture->uav = nullptr;
-	upscalingTempTexture->resource = nullptr;
-	delete upscalingTempTexture;
+	upscalingTexture->srv = nullptr;
+	upscalingTexture->uav = nullptr;
+	upscalingTexture->resource = nullptr;
+	delete upscalingTexture;
+
+	maskTexture->srv = nullptr;
+	maskTexture->uav = nullptr;
+	maskTexture->resource = nullptr;
+	delete maskTexture;
 }

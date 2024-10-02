@@ -128,14 +128,13 @@ HRESULT Streamline::CreateDeviceAndSwapChain(IDXGIAdapter* pAdapter,
 	return hr;
 }
 
-void Streamline::Upscale(Texture2D* a_upscaleTexture)
+void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask)
 {
 	UpdateConstants();
 
 	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
 	static auto& depthTexture = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
 	static auto& motionVectorsTexture = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR];
-	static auto& transparencyMaskTexture = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kTEMPORAL_AA_MASK];
 
 	static auto gameViewport = RE::BSGraphics::State::GetSingleton();
 	static auto context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
@@ -167,7 +166,7 @@ void Streamline::Upscale(Texture2D* a_upscaleTexture)
 		sl::ResourceTag depthTag = sl::ResourceTag{ &depth, sl::kBufferTypeDepth, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 		sl::ResourceTag mvecTag = sl::ResourceTag{ &mvec, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 
-		sl::Resource transparencyMask = { sl::ResourceType::eTex2d, transparencyMaskTexture.texture, 0 };
+		sl::Resource transparencyMask = { sl::ResourceType::eTex2d, a_mask->resource.get(), 0 };
 		sl::ResourceTag transparencyMaskTag = sl::ResourceTag{ &transparencyMask, sl::kBufferTypeTransparencyHint, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 
 		sl::ResourceTag resourceTags[] = { colorInTag, colorOutTag, depthTag, mvecTag, transparencyMaskTag };
