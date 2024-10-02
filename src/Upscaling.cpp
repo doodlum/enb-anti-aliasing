@@ -14,7 +14,7 @@ void Upscaling::RefreshUI()
 
 	auto generalBar = g_ENB->TwGetBarByEnum(ENB_API::ENBWindowType::EditorBarButtons);
 
-	g_ENB->TwAddVarRW(generalBar, "Mode", aaType, streamline->featureDLSS ? &settings.upscaleMode : &settings.upscaleModeNoDLSS, "group='ANTIALIASING'");
+	g_ENB->TwAddVarRW(generalBar, "Method", aaType, streamline->featureDLSS ? &settings.upscaleMode : &settings.upscaleModeNoDLSS, "group='ANTIALIASING'");
 }
 
 Upscaling::UpscaleMode Upscaling::GetUpscaleMode()
