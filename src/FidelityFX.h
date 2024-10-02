@@ -17,7 +17,12 @@ public:
 
 	FfxFsr3Context fsrContext;
 
+	Texture2D* reactiveMask;
+	Texture2D* opaqueColor;
+
 	void CreateFSRResources();
 	void DestroyFSRResources();
+	void CopyOpaqueMask();
+	void GenerateReactiveMask();
 	void Upscale(Texture2D* a_color);
 };

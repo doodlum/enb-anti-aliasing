@@ -2,6 +2,7 @@
 
 #include "Upscaling.h"
 #include "Util.h"
+#include <FidelityFX/gpu/fsr3upscaler/ffx_fsr3upscaler_resources.h>
 
 FfxResource ffxGetResource(ID3D11Resource* dx11Resource,
 	[[maybe_unused]] wchar_t const* ffxResName,
@@ -24,10 +25,6 @@ FfxResource ffxGetResource(ID3D11Resource* dx11Resource,
 void FidelityFX::CreateFSRResources()
 {
 	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
-	static auto& depthTexture = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
-	static auto& motionVectorsTexture = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR];
-	static auto& transparencyMaskTexture = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kTEMPORAL_AA_MASK];
-
 	static auto gameViewport = RE::BSGraphics::State::GetSingleton();
 	static auto context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
 	static auto device = reinterpret_cast<ID3D11Device*>(renderer->GetRuntimeData().forwarder);
@@ -55,12 +52,67 @@ void FidelityFX::CreateFSRResources()
 
 	if (ffxFsr3ContextCreate(&fsrContext, &contextDescription) != FFX_OK)
 		logger::critical("[FidelityFX] Failed to initialize FSR3 context!");
+
+	auto& main = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kMAIN];
+
+	D3D11_TEXTURE2D_DESC texDesc{};
+	main.texture->GetDesc(&texDesc);
+
+	texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	opaqueColor = new Texture2D(texDesc);
+
+	texDesc.Format = DXGI_FORMAT_R8_UNORM;
+	reactiveMask = new Texture2D(texDesc);
 }
 
 void FidelityFX::DestroyFSRResources()
 {
 	if (ffxFsr3ContextDestroy(&fsrContext) != FFX_OK)
 		logger::critical("[FidelityFX] Failed to destroy FSR3 context!");
+}
+
+void FidelityFX::CopyOpaqueMask()
+{
+	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
+	static auto context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
+	static auto shadowState = RE::BSGraphics::RendererShadowState::GetSingleton();
+	auto& preTransparencyColor = renderer->GetRuntimeData().renderTargets[shadowState->GetRuntimeData().renderTargets[0]];
+
+	context->CopyResource(opaqueColor->resource.get(), preTransparencyColor.texture);
+}
+
+void FidelityFX::GenerateReactiveMask()
+{
+	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
+	static auto context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
+	
+	context->OMSetRenderTargets(0, nullptr, nullptr);
+
+	static auto shadowState = RE::BSGraphics::RendererShadowState::GetSingleton();
+	auto& preUpscaleColor = renderer->GetRuntimeData().renderTargets[shadowState->GetRuntimeData().renderTargets[0]];
+
+	FfxFsr3GenerateReactiveDescription generateReactiveParameters = {};
+	generateReactiveParameters.commandList = ffxGetCommandListDX11(context);
+	generateReactiveParameters.colorOpaqueOnly = ffxGetResource(opaqueColor->resource.get(), L"FSR3_Input_Opaque_Color", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+	generateReactiveParameters.colorPreUpscale = ffxGetResource(preUpscaleColor.texture, L"FSR3_Input_PreUpscaleColor", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+	generateReactiveParameters.outReactive = ffxGetResource(reactiveMask->resource.get(), L"FSR3_InputReactiveMask", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+
+	static auto gameViewport = RE::BSGraphics::State::GetSingleton();
+	generateReactiveParameters.renderSize.width = gameViewport->screenWidth;
+	generateReactiveParameters.renderSize.height = gameViewport->screenHeight;
+
+	generateReactiveParameters.scale = 1.f;
+	generateReactiveParameters.cutoffThreshold = 0.2f;
+	generateReactiveParameters.binaryValue = 0.9f;
+	generateReactiveParameters.flags = FFX_FSR3UPSCALER_AUTOREACTIVEFLAGS_APPLY_TONEMAP |
+	                                   FFX_FSR3UPSCALER_AUTOREACTIVEFLAGS_APPLY_THRESHOLD |
+	                                   FFX_FSR3UPSCALER_AUTOREACTIVEFLAGS_USE_COMPONENTS_MAX;
+
+	if (ffxFsr3ContextGenerateReactiveMask(&fsrContext, &generateReactiveParameters) != FFX_OK)
+		logger::error("[FidelityFX] Failed to generate reactive mask!");
+
+	shadowState->GetRuntimeData().stateUpdateFlags.set(RE::BSGraphics::ShaderFlags::DIRTY_RENDERTARGET);  // Run OMSetRenderTargets again
+	Util::SetDirtyStates(false);
 }
 
 void FidelityFX::Upscale(Texture2D* a_color)
@@ -81,7 +133,7 @@ void FidelityFX::Upscale(Texture2D* a_color)
 		dispatchParameters.motionVectors = ffxGetResource(motionVectorsTexture.texture, L"FSR3_InputMotionVectors", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 		dispatchParameters.exposure = ffxGetResource(nullptr, L"FSR3_InputExposure", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 		dispatchParameters.upscaleOutput = dispatchParameters.color;
-		dispatchParameters.reactive = ffxGetResource(nullptr, L"FSR3_InputReactiveMap", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+		dispatchParameters.reactive = ffxGetResource(reactiveMask->resource.get(), L"FSR3_InputReactiveMap", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 		dispatchParameters.transparencyAndComposition = ffxGetResource(nullptr, L"FSR3_TransparencyAndCompositionMap", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 
 		dispatchParameters.motionVectorScale.x = (float)gameViewport->screenWidth;
@@ -107,11 +159,9 @@ void FidelityFX::Upscale(Texture2D* a_color)
 		dispatchParameters.reset = false;
 		dispatchParameters.preExposure = 1.0f;
 
-		dispatchParameters.flags = 0;
+		dispatchParameters.flags = FFX_FSR3_UPSCALER_FLAG_DRAW_DEBUG_VIEW;
 
-		FfxErrorCode errorCode = ffxFsr3ContextDispatchUpscale(&fsrContext, &dispatchParameters);
-		if (errorCode != FFX_OK) {
+		if (ffxFsr3ContextDispatchUpscale(&fsrContext, &dispatchParameters) != FFX_OK)
 			logger::error("[FidelityFX] Failed to dispatch upscaling!");
-		}
 	}
 }

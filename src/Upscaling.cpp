@@ -59,18 +59,11 @@ ID3D11ComputeShader* Upscaling::GetRCASComputeShader()
 	return rcasCS;
 }
 
-static void SetDirtyStates(bool a_computeShader)
-{
-	using func_t = decltype(&SetDirtyStates);
-	static REL::Relocation<func_t> func{ REL::RelocationID(75580, 77386) };
-	func(a_computeShader);
-}
-
 void Upscaling::Upscale()
 {
 	CheckResources();
 
-	SetDirtyStates(false);
+	Util::SetDirtyStates(false);
 
 	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
 	static auto context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
@@ -174,4 +167,19 @@ void Upscaling::DestroyUpscalingResources()
 	upscalingTempTexture->uav = nullptr;
 	upscalingTempTexture->resource = nullptr;
 	delete upscalingTempTexture;
+}
+
+void Upscaling::PreTransparency()
+{
+	CheckResources();
+	if (GetUpscaleMode() == UpscaleMode::kFSR) {
+		FidelityFX::GetSingleton()->CopyOpaqueMask();
+	}
+}
+
+void Upscaling::PostTransparency()
+{
+	if (GetUpscaleMode() == UpscaleMode::kFSR) {
+		FidelityFX::GetSingleton()->GenerateReactiveMask();
+	}
 }

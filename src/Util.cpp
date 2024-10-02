@@ -4,6 +4,13 @@
 
 namespace Util
 {
+	void SetDirtyStates(bool a_computeShader)
+	{
+		using func_t = decltype(&SetDirtyStates);
+		static REL::Relocation<func_t> func{ REL::RelocationID(75580, 77386) };
+		func(a_computeShader);
+	}
+
 	ID3D11DeviceChild* CompileShader(const wchar_t* FilePath, const char* ProgramType, const char* Program)
 	{
 		static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
