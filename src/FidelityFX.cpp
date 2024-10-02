@@ -100,7 +100,6 @@ void FidelityFX::GenerateReactiveMask()
 	static auto gameViewport = RE::BSGraphics::State::GetSingleton();
 	generateReactiveParameters.renderSize.width = gameViewport->screenWidth;
 	generateReactiveParameters.renderSize.height = gameViewport->screenHeight;
-
 	generateReactiveParameters.scale = 1.f;
 	generateReactiveParameters.cutoffThreshold = 0.2f;
 	generateReactiveParameters.binaryValue = 0.9f;
@@ -108,8 +107,7 @@ void FidelityFX::GenerateReactiveMask()
 	                                   FFX_FSR3UPSCALER_AUTOREACTIVEFLAGS_APPLY_THRESHOLD |
 	                                   FFX_FSR3UPSCALER_AUTOREACTIVEFLAGS_USE_COMPONENTS_MAX;
 
-	if (ffxFsr3ContextGenerateReactiveMask(&fsrContext, &generateReactiveParameters) != FFX_OK)
-		logger::error("[FidelityFX] Failed to generate reactive mask!");
+	ffxFsr3ContextGenerateReactiveMask(&fsrContext, &generateReactiveParameters); // Could maybe fail (non critical), but I have not encountered this
 
 	shadowState->GetRuntimeData().stateUpdateFlags.set(RE::BSGraphics::ShaderFlags::DIRTY_RENDERTARGET);  // Run OMSetRenderTargets again
 	Util::SetDirtyStates(false);
@@ -159,7 +157,7 @@ void FidelityFX::Upscale(Texture2D* a_color)
 		dispatchParameters.reset = false;
 		dispatchParameters.preExposure = 1.0f;
 
-		dispatchParameters.flags = FFX_FSR3_UPSCALER_FLAG_DRAW_DEBUG_VIEW;
+		dispatchParameters.flags = 0;
 
 		if (ffxFsr3ContextDispatchUpscale(&fsrContext, &dispatchParameters) != FFX_OK)
 			logger::error("[FidelityFX] Failed to dispatch upscaling!");

@@ -96,8 +96,8 @@ public:
 	static void InstallHooks()
 	{
 		if (!REL::Module::IsVR()) {
-			stl::write_thunk_call<RenderOpaqueImagespaces>(REL::RelocationID(100424, 107270).address() + REL::Relocate(0x28D, 0x3EA, 0x448));
-			stl::write_thunk_call<RenderWorld>(REL::RelocationID(35560, 107270).address() + REL::Relocate(0x831, 0x3EA, 0x448));
+			stl::write_thunk_call<RenderOpaqueImagespaces>(REL::RelocationID(100424, 107142).address() + REL::Relocate(0x28D, 0x2BA));
+			stl::write_thunk_call<RenderWorld>(REL::RelocationID(35560, 36559).address() + REL::Relocate(0x831, 0x841));
 			stl::write_thunk_call<TAA_BeginTechnique>(REL::RelocationID(100540, 107270).address() + REL::Relocate(0x3E9, 0x3EA, 0x448));
 			stl::write_thunk_call<TAA_EndTechnique>(REL::RelocationID(100540, 107270).address() + REL::Relocate(0x3F3, 0x3F4, 0x452));
 		}
