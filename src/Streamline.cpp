@@ -147,6 +147,7 @@ void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask)
 		dlssOptions.colorBuffersHDR = sl::Boolean::eFalse;
 		dlssOptions.preExposure = 1.0f;
 		dlssOptions.sharpness = 0.0f;
+		dlssOptions.dlaaPreset = sl::DLSSPreset::ePresetC;
 
 		if (SL_FAILED(result, slDLSSSetOptions(viewport, dlssOptions))) {
 			logger::critical("[Streamline] Could not enable DLSS");
