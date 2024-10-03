@@ -15,7 +15,7 @@ public:
 
 	void RefreshUI();
 
-	enum class UpscaleMode
+	enum class UpscaleMethod
 	{
 		kTAA,
 		kFSR,
@@ -24,13 +24,13 @@ public:
 
 	struct Settings
 	{
-		uint upscaleMode = (uint)UpscaleMode::kDLSS;
-		uint upscaleModeNoDLSS = (uint)UpscaleMode::kFSR;
+		uint upscaleMethod = (uint)UpscaleMethod::kDLSS;
+		uint upscaleMethodNoDLSS = (uint)UpscaleMethod::kFSR;
 	};
 
 	Settings settings;
 
-	UpscaleMode GetUpscaleMode();
+	UpscaleMethod GetUpscaleMethod();
 
 	void CheckResources();
 
@@ -40,10 +40,14 @@ public:
 	ID3D11ComputeShader* encodeMaskCS;
 	ID3D11ComputeShader* GetEncodeMaskComputeShader();
 
+	ID3D11ComputeShader* encodeMaskFSRCS;
+	ID3D11ComputeShader* GetEncodeMaskFSRComputeShader();
+
 	void Upscale();
 
 	Texture2D* upscalingTexture;
 	Texture2D* maskTexture;
+	Texture2D* exposureTexture;
 
 	void CreateUpscalingResources();
 	void DestroyUpscalingResources();
@@ -65,7 +69,7 @@ public:
 		static void thunk(RE::BSImagespaceShaderISTemporalAA* a_shader, RE::BSTriShape* a_null)
 		{
 			auto singleton = GetSingleton();
-			if (singleton->GetUpscaleMode() != UpscaleMode::kTAA && singleton->validTaaPass)
+			if (singleton->GetUpscaleMethod() != UpscaleMethod::kTAA && singleton->validTaaPass)
 				singleton->Upscale();
 			else
 				func(a_shader, a_null);

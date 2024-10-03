@@ -49,7 +49,7 @@ void FidelityFX::CreateFSRResources()
 	contextDescription.maxUpscaleSize.height = gameViewport->screenHeight;
 	contextDescription.displaySize.width = gameViewport->screenWidth;
 	contextDescription.displaySize.height = gameViewport->screenHeight;
-	contextDescription.flags = FFX_FSR3_ENABLE_UPSCALING_ONLY | FFX_FSR3_ENABLE_AUTO_EXPOSURE;
+	contextDescription.flags = FFX_FSR3_ENABLE_UPSCALING_ONLY;
 	contextDescription.backBufferFormat = FFX_SURFACE_FORMAT_R8G8B8A8_UNORM;
 	contextDescription.backendInterfaceUpscaling = fsrInterface;
 
@@ -63,7 +63,7 @@ void FidelityFX::DestroyFSRResources()
 		logger::critical("[FidelityFX] Failed to destroy FSR3 context!");
 }
 
-void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_mask)
+void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_mask, Texture2D* a_exposure)
 {
 	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
 	static auto& depthTexture = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
@@ -79,7 +79,7 @@ void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_mask)
 		dispatchParameters.color = ffxGetResource(a_color->resource.get(), L"FSR3_Input_OutputColor", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 		dispatchParameters.depth = ffxGetResource(depthTexture.texture, L"FSR3_InputDepth", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 		dispatchParameters.motionVectors = ffxGetResource(motionVectorsTexture.texture, L"FSR3_InputMotionVectors", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-		dispatchParameters.exposure = ffxGetResource(nullptr, L"FSR3_InputExposure", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+		dispatchParameters.exposure = ffxGetResource(a_exposure->resource.get(), L"FSR3_InputExposure", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 		dispatchParameters.upscaleOutput = dispatchParameters.color;
 		dispatchParameters.reactive = ffxGetResource(a_mask->resource.get(), L"FSR3_InputReactiveMap", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 		dispatchParameters.transparencyAndComposition = ffxGetResource(nullptr, L"FSR3_TransparencyAndCompositionMap", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
@@ -109,9 +109,7 @@ void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_mask)
 
 		dispatchParameters.flags = 0;
 
-		FfxErrorCode errorCode = ffxFsr3ContextDispatchUpscale(&fsrContext, &dispatchParameters);
-		if (errorCode != FFX_OK) {
-			logger::error("[FidelityFX] Failed to dispatch upscaling!");
-		}
+		if (ffxFsr3ContextDispatchUpscale(&fsrContext, &dispatchParameters) != FFX_OK)
+			logger::critical("[FidelityFX] Failed to dispatch upscaling!");
 	}
 }

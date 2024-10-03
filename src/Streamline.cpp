@@ -128,7 +128,7 @@ HRESULT Streamline::CreateDeviceAndSwapChain(IDXGIAdapter* pAdapter,
 	return hr;
 }
 
-void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask)
+void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask, Texture2D* a_exposure)
 {
 	UpdateConstants();
 
@@ -167,10 +167,13 @@ void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask)
 		sl::ResourceTag depthTag = sl::ResourceTag{ &depth, sl::kBufferTypeDepth, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 		sl::ResourceTag mvecTag = sl::ResourceTag{ &mvec, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 
-		sl::Resource transparencyMask = { sl::ResourceType::eTex2d, a_mask->resource.get(), 0 };
-		sl::ResourceTag transparencyMaskTag = sl::ResourceTag{ &transparencyMask, sl::kBufferTypeTransparencyHint, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
+		sl::Resource mask = { sl::ResourceType::eTex2d, a_mask->resource.get(), 0 };
+		sl::ResourceTag maskTag = sl::ResourceTag{ &mask, sl::kBufferTypeBiasCurrentColorHint, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 
-		sl::ResourceTag resourceTags[] = { colorInTag, colorOutTag, depthTag, mvecTag, transparencyMaskTag };
+		sl::Resource exposure = { sl::ResourceType::eTex2d, a_exposure->resource.get(), 0 };
+		sl::ResourceTag exposureTag = sl::ResourceTag{ &exposure, sl::kBufferTypeExposure, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
+
+		sl::ResourceTag resourceTags[] = { colorInTag, colorOutTag, depthTag, mvecTag, maskTag, exposureTag };
 		slSetTag(viewport, resourceTags, _countof(resourceTags), context);
 	}
 

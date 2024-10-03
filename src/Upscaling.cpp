@@ -14,36 +14,36 @@ void Upscaling::RefreshUI()
 
 	auto generalBar = g_ENB->TwGetBarByEnum(ENB_API::ENBWindowType::EditorBarButtons);
 
-	g_ENB->TwAddVarRW(generalBar, "Method", aaType, streamline->featureDLSS ? &settings.upscaleMode : &settings.upscaleModeNoDLSS, "group='ANTIALIASING'");
+	g_ENB->TwAddVarRW(generalBar, "Method", aaType, streamline->featureDLSS ? &settings.upscaleMethod : &settings.upscaleMethodNoDLSS, "group='ANTIALIASING'");
 }
 
-Upscaling::UpscaleMode Upscaling::GetUpscaleMode()
+Upscaling::UpscaleMethod Upscaling::GetUpscaleMethod()
 {
 	auto streamline = Streamline::GetSingleton();
-	return streamline->featureDLSS ? (UpscaleMode)settings.upscaleMode : (UpscaleMode)settings.upscaleModeNoDLSS;
+	return streamline->featureDLSS ? (UpscaleMethod)settings.upscaleMethod : (UpscaleMethod)settings.upscaleMethodNoDLSS;
 }
 
 void Upscaling::CheckResources()
 {
-	static auto previousUpscaleMode = UpscaleMode::kTAA;
-	auto currentUpscaleMode = GetUpscaleMode();
+	static auto previousUpscaleMode = UpscaleMethod::kTAA;
+	auto currentUpscaleMode = GetUpscaleMethod();
 
 	auto streamline = Streamline::GetSingleton();
 	auto fidelityFX = FidelityFX::GetSingleton();
 
 	if (previousUpscaleMode != currentUpscaleMode) {
-		if (previousUpscaleMode == UpscaleMode::kTAA)
+		if (previousUpscaleMode == UpscaleMethod::kTAA)
 			CreateUpscalingResources();
-		else if (previousUpscaleMode == UpscaleMode::kDLSS)
+		else if (previousUpscaleMode == UpscaleMethod::kDLSS)
 			streamline->DestroyDLSSResources();
-		else if (previousUpscaleMode == UpscaleMode::kFSR)
+		else if (previousUpscaleMode == UpscaleMethod::kFSR)
 			fidelityFX->DestroyFSRResources();
 
-		if (currentUpscaleMode == UpscaleMode::kTAA)
+		if (currentUpscaleMode == UpscaleMethod::kTAA)
 			DestroyUpscalingResources();
-		else if (previousUpscaleMode == UpscaleMode::kFSR)
+		else if (previousUpscaleMode == UpscaleMethod::kFSR)
 			fidelityFX->DestroyFSRResources();
-		else if (currentUpscaleMode == UpscaleMode::kFSR)
+		else if (currentUpscaleMode == UpscaleMethod::kFSR)
 			fidelityFX->CreateFSRResources();
 
 		previousUpscaleMode = currentUpscaleMode;
@@ -59,7 +59,6 @@ ID3D11ComputeShader* Upscaling::GetRCASComputeShader()
 	return rcasCS;
 }
 
-
 ID3D11ComputeShader* Upscaling::GetEncodeMaskComputeShader()
 {
 	if (!encodeMaskCS) {
@@ -67,6 +66,15 @@ ID3D11ComputeShader* Upscaling::GetEncodeMaskComputeShader()
 		encodeMaskCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/EncodeMaskCS.hlsl", "cs_5_0");
 	}
 	return encodeMaskCS;
+}
+
+ID3D11ComputeShader* Upscaling::GetEncodeMaskFSRComputeShader()
+{
+	if (!encodeMaskFSRCS) {
+		logger::debug("Compiling EncodeMaskFSRCS.hlsl");
+		encodeMaskFSRCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/EncodeMaskFSRCS.hlsl", "cs_5_0");
+	}
+	return encodeMaskFSRCS;
 }
 
 static void SetDirtyStates(bool a_computeShader)
@@ -112,6 +120,8 @@ void Upscaling::Upscale()
 	uint dispatchX = (uint)std::ceil((float)gameViewport->screenWidth / 8.0f);
 	uint dispatchY = (uint)std::ceil((float)gameViewport->screenHeight / 8.0f);
 
+	auto upscaleMethod = GetUpscaleMethod();
+
 	{	
 		static auto& temporalAAMask = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kTEMPORAL_AA_MASK];
 
@@ -122,7 +132,7 @@ void Upscaling::Upscale()
 			ID3D11UnorderedAccessView* uavs[1] = { maskTexture->uav.get() };
 			context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, nullptr);
 
-			context->CSSetShader(GetEncodeMaskComputeShader(), nullptr, 0);
+			context->CSSetShader(upscaleMethod == UpscaleMethod::kDLSS ? GetEncodeMaskComputeShader() : GetEncodeMaskFSRComputeShader(), nullptr, 0);
 
 			context->Dispatch(dispatchX, dispatchY, 1);
 		}
@@ -137,14 +147,12 @@ void Upscaling::Upscale()
 		context->CSSetShader(shader, nullptr, 0);
 	}
 
-	auto upscaleMode = GetUpscaleMode();
-
-	if (upscaleMode == UpscaleMode::kDLSS)
-		Streamline::GetSingleton()->Upscale(upscalingTexture, maskTexture);
+	if (upscaleMethod == UpscaleMethod::kDLSS)
+		Streamline::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture);
 	else
-		FidelityFX::GetSingleton()->Upscale(upscalingTexture, maskTexture);
+		FidelityFX::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture);
 
-	if (GetUpscaleMode() != UpscaleMode::kFSR) {
+	if (GetUpscaleMethod() != UpscaleMethod::kFSR) {
 		context->CopyResource(inputTextureResource, upscalingTexture->resource.get());
 
 		{
@@ -209,6 +217,18 @@ void Upscaling::CreateUpscalingResources()
 	maskTexture = new Texture2D(texDesc);
 	maskTexture->CreateSRV(srvDesc);
 	maskTexture->CreateUAV(uavDesc);
+
+	texDesc.Width = 1;
+	texDesc.Height = 1;
+
+	exposureTexture = new Texture2D(texDesc);
+	exposureTexture->CreateSRV(srvDesc);
+	exposureTexture->CreateUAV(uavDesc);
+
+	static auto context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
+
+	float clearColor[4] = { 1, 1, 1, 1 };
+	context->ClearUnorderedAccessViewFloat(exposureTexture->uav.get(), clearColor);
 }
 
 void Upscaling::DestroyUpscalingResources()
@@ -222,4 +242,9 @@ void Upscaling::DestroyUpscalingResources()
 	maskTexture->uav = nullptr;
 	maskTexture->resource = nullptr;
 	delete maskTexture;
+
+	exposureTexture->srv = nullptr;
+	exposureTexture->uav = nullptr;
+	exposureTexture->resource = nullptr;
+	delete exposureTexture;
 }
