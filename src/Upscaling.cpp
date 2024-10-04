@@ -68,15 +68,6 @@ ID3D11ComputeShader* Upscaling::GetEncodeMaskComputeShader()
 	return encodeMaskCS;
 }
 
-ID3D11ComputeShader* Upscaling::GetEncodeMaskFSRComputeShader()
-{
-	if (!encodeMaskFSRCS) {
-		logger::debug("Compiling EncodeMaskFSRCS.hlsl");
-		encodeMaskFSRCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/EncodeMaskFSRCS.hlsl", "cs_5_0");
-	}
-	return encodeMaskFSRCS;
-}
-
 static void SetDirtyStates(bool a_computeShader)
 {
 	using func_t = decltype(&SetDirtyStates);
@@ -132,7 +123,7 @@ void Upscaling::Upscale()
 			ID3D11UnorderedAccessView* uavs[1] = { maskTexture->uav.get() };
 			context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, nullptr);
 
-			context->CSSetShader(upscaleMethod == UpscaleMethod::kDLSS ? GetEncodeMaskComputeShader() : GetEncodeMaskFSRComputeShader(), nullptr, 0);
+			context->CSSetShader(GetEncodeMaskComputeShader(), nullptr, 0);
 
 			context->Dispatch(dispatchX, dispatchY, 1);
 		}

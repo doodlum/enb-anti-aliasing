@@ -40,9 +40,6 @@ public:
 	ID3D11ComputeShader* encodeMaskCS;
 	ID3D11ComputeShader* GetEncodeMaskComputeShader();
 
-	ID3D11ComputeShader* encodeMaskFSRCS;
-	ID3D11ComputeShader* GetEncodeMaskFSRComputeShader();
-
 	void Upscale();
 
 	Texture2D* upscalingTexture;
