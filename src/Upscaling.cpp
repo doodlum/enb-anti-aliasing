@@ -221,6 +221,10 @@ void Upscaling::CreateUpscalingResources()
 	texDesc.Width = 1;
 	texDesc.Height = 1;
 
+	texDesc.Format = DXGI_FORMAT_R16_FLOAT;
+	srvDesc.Format = texDesc.Format;
+	uavDesc.Format = texDesc.Format;
+
 	exposureTexture = new Texture2D(texDesc);
 	exposureTexture->CreateSRV(srvDesc);
 	exposureTexture->CreateUAV(uavDesc);
