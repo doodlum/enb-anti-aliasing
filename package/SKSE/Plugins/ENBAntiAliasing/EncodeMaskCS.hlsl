@@ -3,5 +3,7 @@ RWTexture2D<float> OutputTexture : register(u0);
 
 [numthreads(8, 8, 1)] void main(uint3 DTid
 								: SV_DispatchThreadID) {
-	OutputTexture[DTid.xy] = 0.5 * length(InputTexture[DTid.xy]);
+
+	float2 taaMask = InputTexture[DTid.xy];								
+	OutputTexture[DTid.xy] = (0.5 * taaMask.x) + taaMask.y;
 }
