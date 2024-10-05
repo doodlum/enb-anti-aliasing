@@ -1,20 +1,54 @@
 #include "Upscaling.h"
 
+#include <ClibUtil/simpleINI.hpp>
+
 #include <ENB/ENBSeriesAPI.h>
 extern ENB_API::ENBSDKALT1001* g_ENB;
 
 #include "Util.h"
 
+void Upscaling::LoadINI()
+{
+	std::lock_guard<std::shared_mutex> lk(fileLock);
+	CSimpleIniA ini;
+	ini.LoadFile(L"enbseries/enbantialiasing.ini");
+
+	settings.upscaleMethod = clib_util::ini::get_value<uint>(ini, settings.upscaleMethod, "ANTIALIASING", "Method", "# Used when DLAA is available\n# Default: 2 (DLAA)");
+	settings.upscaleMethodNoDLSS = clib_util::ini::get_value<uint>(ini, settings.upscaleMethodNoDLSS, "ANTIALIASING", "MethodNoDLAA", "# Used when DLAA is not available\n# Default: 1 (FSR)");
+	settings.sharpness = clib_util::ini::get_value<float>(ini, settings.sharpness, "ANTIALIASING", "Sharpness", "# RCAS sharpening, range of 0.0 to 1.0\n# Default: 0.5");
+	settings.dlssPreset = clib_util::ini::get_value<uint>(ini, settings.dlssPreset, "ANTIALIASING", "DLAAPreset", "# DLAA preset which affects image clarity and ghosting\n# Default: 3 (Preset C)");
+}
+
+void Upscaling::SaveINI()
+{
+	std::lock_guard<std::shared_mutex> lk(fileLock);
+	CSimpleIniA ini;
+
+	ini.SetValue("ANTIALIASING", "Method", std::to_string(settings.upscaleMethod).c_str(), "# Used when DLAA is available\n# Default: 2 (DLAA)");
+	ini.SetValue("ANTIALIASING", "MethodNoDLSS", std::to_string(settings.upscaleMethodNoDLSS).c_str(), "# Used when DLAA is not available\n# Default: 1 (FSR)");
+	ini.SetValue("ANTIALIASING", "Sharpness", std::to_string(settings.sharpness).c_str(), "# RCAS sharpening, range of 0.0 to 1.0\n# Default: 0.5");
+	ini.SetValue("ANTIALIASING", "DLAAPreset", std::to_string(settings.dlssPreset).c_str(), "# DLAA preset which affects image clarity and ghosting\n# Default: 3 (Preset C)");
+
+	ini.SaveFile("enbseries/enbantialiasing.ini");
+}
+
 void Upscaling::RefreshUI()
 {
 	auto streamline = Streamline::GetSingleton();
 
-	TwEnumVal aaTypes[] = { { 0, "TAA" }, { 1, "AMD FSR 3.1" }, { 2, "NVIDIA DLAA" }};
-	TwType aaType = g_ENB->TwDefineEnum("AA_TYPE", aaTypes, streamline->featureDLSS ? 3 : 2);
+	TwEnumVal aaMethodsDefine[] = { { 0, "TAA" }, { 1, "AMD FSR 3.1" }, { 2, "NVIDIA DLAA" }};
+	TwType aaMethodType = g_ENB->TwDefineEnum("AA_METHOD", aaMethodsDefine, streamline->featureDLSS ? 3 : 2);
 
 	auto generalBar = g_ENB->TwGetBarByEnum(ENB_API::ENBWindowType::EditorBarButtons);
 
-	g_ENB->TwAddVarRW(generalBar, "Method", aaType, streamline->featureDLSS ? &settings.upscaleMethod : &settings.upscaleMethodNoDLSS, "group='ANTIALIASING'");
+	g_ENB->TwAddVarRW(generalBar, "Method", aaMethodType, streamline->featureDLSS ? &settings.upscaleMethod : &settings.upscaleMethodNoDLSS, "group='ANTIALIASING'");
+	g_ENB->TwAddVarRW(generalBar, "Sharpness", TwType::TW_TYPE_FLOAT, &settings.sharpness, "group='ANTIALIASING' min=0.0 max=1.0 step=0.1");
+
+		TwEnumVal dlssPresetsDefine[] = { { 0, "Default" }, { 1, "Preset A" }, { 2, "Preset B" }, { 3, "Preset C" }, { 4, "Preset D" }, { 5, "Preset E" }, { 6, "Preset F" } };
+		TwType dlssPresetType = g_ENB->TwDefineEnum("DLSS_PRESET", dlssPresetsDefine, 7);
+
+		g_ENB->TwAddVarRW(generalBar, "DLAA Preset", dlssPresetType, &settings.dlssPreset, "group='ANTIALIASING'");
+	
 }
 
 Upscaling::UpscaleMethod Upscaling::GetUpscaleMethod()
@@ -34,15 +68,13 @@ void Upscaling::CheckResources()
 	if (previousUpscaleMode != currentUpscaleMode) {
 		if (previousUpscaleMode == UpscaleMethod::kTAA)
 			CreateUpscalingResources();
-		else if (previousUpscaleMode == UpscaleMethod::kDLSS)
-			streamline->DestroyDLSSResources();
 		else if (previousUpscaleMode == UpscaleMethod::kFSR)
 			fidelityFX->DestroyFSRResources();
+		else if (previousUpscaleMode == UpscaleMethod::kDLSS)
+			streamline->DestroyDLSSResources();
 
 		if (currentUpscaleMode == UpscaleMethod::kTAA)
 			DestroyUpscalingResources();
-		else if (previousUpscaleMode == UpscaleMethod::kFSR)
-			fidelityFX->DestroyFSRResources();
 		else if (currentUpscaleMode == UpscaleMethod::kFSR)
 			fidelityFX->CreateFSRResources();
 
@@ -52,9 +84,21 @@ void Upscaling::CheckResources()
 
 ID3D11ComputeShader* Upscaling::GetRCASComputeShader()
 {
+	static auto previousSharpness = settings.sharpness;
+	auto currentSharpness = settings.sharpness;
+
+	if (previousSharpness != currentSharpness) {
+		previousSharpness = currentSharpness;
+
+		if (rcasCS) {
+			rcasCS->Release();
+			rcasCS = nullptr;
+		}
+	}
+
 	if (!rcasCS) {
 		logger::debug("Compiling RCAS.hlsl");
-		rcasCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/RCAS/RCAS.hlsl", "cs_5_0");
+		rcasCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/RCAS/RCAS.hlsl", { { "SHARPNESS", std::format("{}", currentSharpness).c_str() } }, "cs_5_0");
 	}
 	return rcasCS;
 }
@@ -63,7 +107,7 @@ ID3D11ComputeShader* Upscaling::GetEncodeMaskComputeShader()
 {
 	if (!encodeMaskCS) {
 		logger::debug("Compiling EncodeMaskCS.hlsl");
-		encodeMaskCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/EncodeMaskCS.hlsl", "cs_5_0");
+		encodeMaskCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/EncodeMaskCS.hlsl", {} , "cs_5_0");
 	}
 	return encodeMaskCS;
 }
@@ -112,7 +156,9 @@ void Upscaling::Upscale()
 	uint dispatchY = (uint)std::ceil((float)gameViewport->screenHeight / 8.0f);
 
 	auto upscaleMethod = GetUpscaleMethod();
+	auto dlssPreset = (sl::DLSSPreset)settings.dlssPreset;
 
+	if (!(upscaleMethod == UpscaleMethod::kDLSS && (dlssPreset == sl::DLSSPreset::ePresetA || dlssPreset == sl::DLSSPreset::ePresetB)))
 	{	
 		static auto& temporalAAMask = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kTEMPORAL_AA_MASK];
 
@@ -139,11 +185,11 @@ void Upscaling::Upscale()
 	}
 
 	if (upscaleMethod == UpscaleMethod::kDLSS)
-		Streamline::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture);
+		Streamline::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture, dlssPreset);
 	else
-		FidelityFX::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture);
+		FidelityFX::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture, settings.sharpness);
 
-	if (GetUpscaleMethod() != UpscaleMethod::kFSR) {
+	if (upscaleMethod != UpscaleMethod::kFSR && settings.sharpness ) {
 		context->CopyResource(inputTextureResource, upscalingTexture->resource.get());
 
 		{

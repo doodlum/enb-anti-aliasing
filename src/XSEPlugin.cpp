@@ -84,9 +84,13 @@ bool Load()
 			switch (calltype) {
 			case ENBCallbackType::ENBCallback_PostLoad:
 				Upscaling::GetSingleton()->RefreshUI();
+				Upscaling::GetSingleton()->LoadINI();
 				break;
 			case ENBCallbackType::ENBCallback_PostReset:
 				Upscaling::GetSingleton()->RefreshUI();
+				break;
+			case ENBCallbackType::ENBCallback_PreSave:
+				Upscaling::GetSingleton()->SaveINI();
 				break;
 			}
 		});

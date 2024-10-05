@@ -2,24 +2,11 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
 	ENBAntiAliasing
-	VERSION 1.1.5
+	VERSION 1.2.0
 	LANGUAGES CXX
 )
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-
-# ########################################################################################################################
-# ## Build options
-# ########################################################################################################################
-message("Options:")
-option(AUTO_PLUGIN_DEPLOYMENT "Copy the build output and addons to env:CommunityShadersOutputDir." OFF)
-option(ZIP_TO_DIST "Zip the base mod and addons to their own 7z file in dist." ON)
-option(AIO_ZIP_TO_DIST "Zip the base mod and addons to a AIO 7z file in dist." ON)
-option(TRACY_SUPPORT "Enable support for tracy profiler" OFF)
-message("\tAuto plugin deployment: ${AUTO_PLUGIN_DEPLOYMENT}")
-message("\tZip to dist: ${ZIP_TO_DIST}")
-message("\tAIO Zip to dist: ${AIO_ZIP_TO_DIST}")
-message("\tTracy profiler: ${TRACY_SUPPORT}")
 
 # #######################################################################################################################
 # # Add CMake features
@@ -32,48 +19,25 @@ include(XSEPlugin)
 find_path(BSHOSHANY_THREAD_POOL_INCLUDE_DIRS "BS_thread_pool.hpp")
 find_package(magic_enum CONFIG REQUIRED)
 find_package(xbyak CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
-find_package(EASTL CONFIG REQUIRED)
 find_package(directxtk CONFIG REQUIRED)
 find_package(directxtex CONFIG REQUIRED)
 find_path(CLIB_UTIL_INCLUDE_DIRS "ClibUtil/utils.hpp")
-find_package(pystring CONFIG REQUIRED)
-find_package(cppwinrt CONFIG REQUIRED)
-find_package(unordered_dense CONFIG REQUIRED)
-find_package(efsw CONFIG REQUIRED)
-find_package(Tracy CONFIG REQUIRED)
 add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/Streamline)
 include(FidelityFX-SDK)
-
-target_compile_definitions(
-	${PROJECT_NAME}
-	PRIVATE
-	"$<$<BOOL:${TRACY_SUPPORT}>:TRACY_SUPPORT>"
-)
 
 target_include_directories(
 	${PROJECT_NAME}
 	PRIVATE
-	${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
 	${CLIB_UTIL_INCLUDE_DIRS}
 )
 
 target_link_libraries(
 	${PROJECT_NAME}
 	PRIVATE
-	Microsoft::CppWinRT
 	magic_enum::magic_enum
 	xbyak::xbyak
-	nlohmann_json::nlohmann_json
-	imgui::imgui
-	EASTL
 	Microsoft::DirectXTK
 	Microsoft::DirectXTex
-	pystring::pystring
-	unordered_dense::unordered_dense
-	efsw::efsw
-	Tracy::TracyClient
 	Streamline
 )
 

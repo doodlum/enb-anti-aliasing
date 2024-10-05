@@ -128,7 +128,7 @@ HRESULT Streamline::CreateDeviceAndSwapChain(IDXGIAdapter* pAdapter,
 	return hr;
 }
 
-void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask, Texture2D* a_exposure)
+void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask, Texture2D* a_exposure, sl::DLSSPreset a_preset)
 {
 	UpdateConstants();
 
@@ -139,6 +139,13 @@ void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask, Texture
 	static auto gameViewport = RE::BSGraphics::State::GetSingleton();
 	static auto context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
 
+	static auto previousDlssPreset = a_preset;
+
+	if (previousDlssPreset != a_preset)
+		DestroyDLSSResources();
+
+	previousDlssPreset = a_preset;
+
 	{
 		sl::DLSSOptions dlssOptions{};
 		dlssOptions.mode = sl::DLSSMode::eMaxQuality;
@@ -147,11 +154,11 @@ void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask, Texture
 		dlssOptions.colorBuffersHDR = sl::Boolean::eFalse;
 		dlssOptions.preExposure = 1.0f;
 		dlssOptions.sharpness = 0.0f;
-		dlssOptions.dlaaPreset = sl::DLSSPreset::ePresetC;
-		dlssOptions.qualityPreset = sl::DLSSPreset::ePresetC;
-		dlssOptions.balancedPreset = sl::DLSSPreset::ePresetC;
-		dlssOptions.performancePreset = sl::DLSSPreset::ePresetC;
-		dlssOptions.ultraPerformancePreset = sl::DLSSPreset::ePresetC;
+		dlssOptions.dlaaPreset = a_preset;
+		dlssOptions.qualityPreset = a_preset;
+		dlssOptions.balancedPreset = a_preset;
+		dlssOptions.performancePreset = a_preset;
+		dlssOptions.ultraPerformancePreset = a_preset;
 
 		if (SL_FAILED(result, slDLSSSetOptions(viewport, dlssOptions))) {
 			logger::critical("[Streamline] Could not enable DLSS");
@@ -171,13 +178,15 @@ void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_mask, Texture
 		sl::ResourceTag depthTag = sl::ResourceTag{ &depth, sl::kBufferTypeDepth, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 		sl::ResourceTag mvecTag = sl::ResourceTag{ &mvec, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 
-		sl::Resource mask = { sl::ResourceType::eTex2d, a_mask->resource.get(), 0 };
+		bool needsMask = a_preset != sl::DLSSPreset::ePresetA && a_preset != sl::DLSSPreset::ePresetB;
+
+		sl::Resource mask = { sl::ResourceType::eTex2d, needsMask ? a_mask->resource.get() : nullptr, 0 };
 		sl::ResourceTag maskTag = sl::ResourceTag{ &mask, sl::kBufferTypeBiasCurrentColorHint, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 
 		sl::Resource exposure = { sl::ResourceType::eTex2d, a_exposure->resource.get(), 0 };
 		sl::ResourceTag exposureTag = sl::ResourceTag{ &exposure, sl::kBufferTypeExposure, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 
-		sl::ResourceTag resourceTags[] = { colorInTag, colorOutTag, depthTag, mvecTag, maskTag, exposureTag };
+		sl::ResourceTag resourceTags[] = { colorInTag, colorOutTag, depthTag, mvecTag, exposureTag, maskTag };
 		slSetTag(viewport, resourceTags, _countof(resourceTags), context);
 	}
 

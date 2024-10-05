@@ -1,5 +1,7 @@
 #pragma once
 
+#include <shared_mutex>
+
 #include "Buffer.h"
 #include "FidelityFX.h"
 #include "Streamline.h"
@@ -13,6 +15,9 @@ public:
 		return &singleton;
 	}
 
+	std::shared_mutex fileLock;
+	void LoadINI();
+	void SaveINI();
 	void RefreshUI();
 
 	enum class UpscaleMethod
@@ -26,6 +31,8 @@ public:
 	{
 		uint upscaleMethod = (uint)UpscaleMethod::kDLSS;
 		uint upscaleMethodNoDLSS = (uint)UpscaleMethod::kFSR;
+		float sharpness = 0.5f;
+		uint dlssPreset = (uint)sl::DLSSPreset::ePresetE;
 	};
 
 	Settings settings;
