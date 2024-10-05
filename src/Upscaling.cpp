@@ -25,7 +25,7 @@ void Upscaling::SaveINI()
 	CSimpleIniA ini;
 
 	ini.SetValue("ANTIALIASING", "Method", std::to_string(settings.upscaleMethod).c_str(), "# Used when DLAA is available\n# Default: 2 (DLAA)");
-	ini.SetValue("ANTIALIASING", "MethodNoDLSS", std::to_string(settings.upscaleMethodNoDLSS).c_str(), "# Used when DLAA is not available\n# Default: 1 (FSR)");
+	ini.SetValue("ANTIALIASING", "MethodNoDLAA", std::to_string(settings.upscaleMethodNoDLSS).c_str(), "# Used when DLAA is not available\n# Default: 1 (FSR)");
 	ini.SetValue("ANTIALIASING", "Sharpness", std::to_string(settings.sharpness).c_str(), "# RCAS sharpening, range of 0.0 to 1.0\n# Default: 0.5");
 	ini.SetValue("ANTIALIASING", "DLAAPreset", std::to_string(settings.dlssPreset).c_str(), "# DLAA preset which affects image clarity and ghosting\n# Default: 3 (Preset C)");
 
