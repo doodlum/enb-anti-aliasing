@@ -63,7 +63,7 @@ void FidelityFX::DestroyFSRResources()
 		logger::critical("[FidelityFX] Failed to destroy FSR3 context!");
 }
 
-void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_motionVectors, Texture2D* a_alphaMask, bool a_reset, float a_sharpness)
+void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_motionVectors, Texture2D* a_alphaMask, float2 a_jitter, bool a_reset, float a_sharpness)
 {
 	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
 	static auto& depthTexture = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
@@ -87,8 +87,8 @@ void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_motionVectors, Texture
 		dispatchParameters.motionVectorScale.y = (float)gameViewport->screenHeight;
 		dispatchParameters.renderSize.width = gameViewport->screenWidth;
 		dispatchParameters.renderSize.height = gameViewport->screenHeight;
-		dispatchParameters.jitterOffset.x = gameViewport->projectionPosScaleX;
-		dispatchParameters.jitterOffset.y = gameViewport->projectionPosScaleY;
+		dispatchParameters.jitterOffset.x = -a_jitter.x;
+		dispatchParameters.jitterOffset.y = -a_jitter.y;
 
 		static float& deltaTime = (*(float*)REL::RelocationID(523660, 410199).address());
 		dispatchParameters.frameTimeDelta = deltaTime * 1000.f;

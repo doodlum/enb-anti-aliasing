@@ -16,6 +16,7 @@ public:
 	}
 
 	bool reset = false;
+	float2 jitter = { 0, 0 };
 
 	virtual RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 	{
@@ -60,6 +61,7 @@ public:
 	ID3D11ComputeShader* encodeTexturesCS;
 	ID3D11ComputeShader* GetEncodeTexturesCS();
 
+	void UpdateJitter();
 	void Upscale();
 
 	Texture2D* upscalingTexture;
@@ -68,6 +70,16 @@ public:
 
 	void CreateUpscalingResources();
 	void DestroyUpscalingResources();
+
+	struct Main_UpdateJitter
+	{
+		static void thunk(RE::BSGraphics::State* a_state)
+		{
+			func(a_state);
+			GetSingleton()->UpdateJitter();
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	bool validTaaPass = false;
 
@@ -98,6 +110,7 @@ public:
 	static void InstallHooks()
 	{
 		if (!REL::Module::IsVR()) {
+			stl::write_thunk_call<Main_UpdateJitter>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0xE5, 0xE2, 0x104));
 			stl::write_thunk_call<TAA_BeginTechnique>(REL::RelocationID(100540, 107270).address() + REL::Relocate(0x3E9, 0x3EA, 0x448));
 			stl::write_thunk_call<TAA_EndTechnique>(REL::RelocationID(100540, 107270).address() + REL::Relocate(0x3F3, 0x3F4, 0x452));
 		}

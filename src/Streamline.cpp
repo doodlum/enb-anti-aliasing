@@ -128,9 +128,9 @@ HRESULT Streamline::CreateDeviceAndSwapChain(IDXGIAdapter* pAdapter,
 	return hr;
 }
 
-void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_motionVectors, Texture2D* a_alphaMask, bool a_reset, sl::DLSSPreset a_preset)
+void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_motionVectors, Texture2D* a_alphaMask, float2 a_jitter, bool a_reset, sl::DLSSPreset a_preset)
 {
-	UpdateConstants(a_reset);
+	UpdateConstants(a_jitter, a_reset);
 
 	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
 	static auto& depthTexture = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
@@ -191,7 +191,7 @@ void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_motionVectors
 	slEvaluateFeature(sl::kFeatureDLSS, *frameToken, inputs, _countof(inputs), context);
 }
 
-void Streamline::UpdateConstants(bool a_reset)
+void Streamline::UpdateConstants(float2 a_jitter, bool a_reset)
 {
 	auto cameraData = Util::GetCameraData(0);
 	auto eyePosition = Util::GetEyePosition(0);
@@ -225,11 +225,11 @@ void Streamline::UpdateConstants(bool a_reset)
 	slConstants.clipToCameraView = *(sl::float4x4*)&clipToCameraView;
 	slConstants.clipToPrevClip = *(sl::float4x4*)&cameraToPrevCamera;
 	slConstants.depthInverted = sl::Boolean::eFalse;
-	slConstants.jitterOffset = { gameViewport->projectionPosScaleX, gameViewport->projectionPosScaleY };
+	slConstants.jitterOffset = { -a_jitter.x, -a_jitter.y};
 	slConstants.mvecScale = { 1, 1 };
 	slConstants.prevClipToClip = *(sl::float4x4*)&prevCameraToCamera;
 	slConstants.reset = a_reset ? sl::Boolean::eTrue : sl::Boolean::eFalse;
-	slConstants.motionVectors3D = sl::Boolean::eTrue;
+	slConstants.motionVectors3D = sl::Boolean::eFalse;
 	slConstants.motionVectorsInvalidValue = FLT_MIN;
 	slConstants.orthographicProjection = sl::Boolean::eFalse;
 	slConstants.motionVectorsDilated = sl::Boolean::eFalse;

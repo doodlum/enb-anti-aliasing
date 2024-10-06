@@ -36,19 +36,17 @@ void Upscaling::RefreshUI()
 {
 	auto streamline = Streamline::GetSingleton();
 
-	TwEnumVal aaMethodsDefine[] = { { 0, "TAA" }, { 1, "AMD FSR 3.1" }, { 2, "NVIDIA DLAA" }};
-	TwType aaMethodType = g_ENB->TwDefineEnum("AA_METHOD", aaMethodsDefine, streamline->featureDLSS ? 3 : 2);
-
 	auto generalBar = g_ENB->TwGetBarByEnum(ENB_API::ENBWindowType::EditorBarButtons);
 
+	TwEnumVal aaMethodsDefine[] = { { 0, "TAA" }, { 1, "AMD FSR 3.1" }, { 2, "NVIDIA DLAA" } };
+	TwType aaMethodType = g_ENB->TwDefineEnum("AA_METHOD", aaMethodsDefine, streamline->featureDLSS ? 3 : 2);
 	g_ENB->TwAddVarRW(generalBar, "Method", aaMethodType, streamline->featureDLSS ? &settings.upscaleMethod : &settings.upscaleMethodNoDLSS, "group='ANTIALIASING'");
+	
 	g_ENB->TwAddVarRW(generalBar, "Sharpness", TwType::TW_TYPE_FLOAT, &settings.sharpness, "group='ANTIALIASING' min=0.0 max=1.0 step=0.1");
 
-		TwEnumVal dlssPresetsDefine[] = { { 0, "Default" }, { 1, "Preset A" }, { 2, "Preset B" }, { 3, "Preset C" }, { 4, "Preset D" }, { 5, "Preset E" }, { 6, "Preset F" } };
-		TwType dlssPresetType = g_ENB->TwDefineEnum("DLSS_PRESET", dlssPresetsDefine, 7);
-
-		g_ENB->TwAddVarRW(generalBar, "DLAA Preset", dlssPresetType, &settings.dlssPreset, "group='ANTIALIASING'");
-	
+	TwEnumVal dlssPresetsDefine[] = { { 0, "Default" }, { 1, "Preset A" }, { 2, "Preset B" }, { 3, "Preset C" }, { 4, "Preset D" }, { 5, "Preset E" }, { 6, "Preset F" } };
+	TwType dlssPresetType = g_ENB->TwDefineEnum("DLSS_PRESET", dlssPresetsDefine, 7);
+	g_ENB->TwAddVarRW(generalBar, "DLAA Preset", dlssPresetType, &settings.dlssPreset, "group='ANTIALIASING'");
 }
 
 Upscaling::UpscaleMethod Upscaling::GetUpscaleMethod()
@@ -117,6 +115,19 @@ static void SetDirtyStates(bool a_computeShader)
 	using func_t = decltype(&SetDirtyStates);
 	static REL::Relocation<func_t> func{ REL::RelocationID(75580, 77386) };
 	func(a_computeShader);
+}
+
+void Upscaling::UpdateJitter()
+{
+	auto upscaleMethod = GetUpscaleMethod();
+	if (upscaleMethod != UpscaleMethod::kTAA) {
+		static auto gameViewport = RE::BSGraphics::State::GetSingleton();
+
+		ffxFsr3UpscalerGetJitterOffset(&jitter.x, &jitter.y, gameViewport->frameCount, 8);
+
+		gameViewport->projectionPosScaleX = -2.0f * jitter.x / (float)gameViewport->screenWidth;
+		gameViewport->projectionPosScaleY = 2.0f * jitter.y / (float)gameViewport->screenHeight;
+	}
 }
 
 void Upscaling::Upscale()
@@ -191,9 +202,9 @@ void Upscaling::Upscale()
 	}
 
 	if (upscaleMethod == UpscaleMethod::kDLSS)
-		Streamline::GetSingleton()->Upscale(upscalingTexture, motionVectorsTexture, alphaMaskTexture, reset, dlssPreset);
+		Streamline::GetSingleton()->Upscale(upscalingTexture, motionVectorsTexture, alphaMaskTexture, jitter, reset, dlssPreset);
 	else
-		FidelityFX::GetSingleton()->Upscale(upscalingTexture, motionVectorsTexture, alphaMaskTexture, reset, settings.sharpness);
+		FidelityFX::GetSingleton()->Upscale(upscalingTexture, motionVectorsTexture, alphaMaskTexture, jitter, reset, settings.sharpness);
 
 	if (upscaleMethod != UpscaleMethod::kFSR && settings.sharpness > 0.0f) {
 		context->CopyResource(inputTextureResource, upscalingTexture->resource.get());
