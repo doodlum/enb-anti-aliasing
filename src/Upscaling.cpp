@@ -103,13 +103,13 @@ ID3D11ComputeShader* Upscaling::GetRCASComputeShader()
 	return rcasCS;
 }
 
-ID3D11ComputeShader* Upscaling::GetEncodeMaskComputeShader()
+ID3D11ComputeShader* Upscaling::GetEncodeTexturesCS()
 {
-	if (!encodeMaskCS) {
-		logger::debug("Compiling EncodeMaskCS.hlsl");
-		encodeMaskCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/EncodeMaskCS.hlsl", {} , "cs_5_0");
+	if (!encodeTexturesCS) {
+		logger::debug("Compiling EncodeTexturesCS.hlsl");
+		encodeTexturesCS = (ID3D11ComputeShader*)Util::CompileShader(L"Data/SKSE/Plugins/ENBAntiAliasing/EncodeTexturesCS.hlsl", {}, "cs_5_0");
 	}
-	return encodeMaskCS;
+	return encodeTexturesCS;
 }
 
 static void SetDirtyStates(bool a_computeShader)
@@ -158,26 +158,32 @@ void Upscaling::Upscale()
 	auto upscaleMethod = GetUpscaleMethod();
 	auto dlssPreset = (sl::DLSSPreset)settings.dlssPreset;
 
-	if (!(upscaleMethod == UpscaleMethod::kDLSS && (dlssPreset == sl::DLSSPreset::ePresetA || dlssPreset == sl::DLSSPreset::ePresetB)))
 	{	
+		static auto& depth = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
+		static auto& gameMotionVectors = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR];
 		static auto& temporalAAMask = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGETS::kTEMPORAL_AA_MASK];
 
 		{
-			ID3D11ShaderResourceView* views[1] = { temporalAAMask.SRV };
+			static REL::Relocation<ID3D11Buffer**> perFrame{ REL::RelocationID(524768, 411384) };
+			ID3D11Buffer* buffers[1] = { *perFrame.get() };
+
+			context->CSSetConstantBuffers(12, 1, buffers);
+
+			ID3D11ShaderResourceView* views[3] = { depth.depthSRV, gameMotionVectors.SRV, temporalAAMask.SRV };
 			context->CSSetShaderResources(0, ARRAYSIZE(views), views);
 
-			ID3D11UnorderedAccessView* uavs[1] = { maskTexture->uav.get() };
+			ID3D11UnorderedAccessView* uavs[2] = { motionVectorsTexture->uav.get(), alphaMaskTexture->uav.get() };
 			context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, nullptr);
 
-			context->CSSetShader(GetEncodeMaskComputeShader(), nullptr, 0);
+			context->CSSetShader(GetEncodeTexturesCS(), nullptr, 0);
 
 			context->Dispatch(dispatchX, dispatchY, 1);
 		}
 
-		ID3D11ShaderResourceView* views[1] = { nullptr };
+		ID3D11ShaderResourceView* views[3] = { nullptr, nullptr, nullptr };
 		context->CSSetShaderResources(0, ARRAYSIZE(views), views);
 
-		ID3D11UnorderedAccessView* uavs[1] = { nullptr };
+		ID3D11UnorderedAccessView* uavs[2] = { nullptr, nullptr };
 		context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, nullptr);
 
 		ID3D11ComputeShader* shader = nullptr;
@@ -185,9 +191,9 @@ void Upscaling::Upscale()
 	}
 
 	if (upscaleMethod == UpscaleMethod::kDLSS)
-		Streamline::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture, reset, dlssPreset);
+		Streamline::GetSingleton()->Upscale(upscalingTexture, motionVectorsTexture, alphaMaskTexture, reset, dlssPreset);
 	else
-		FidelityFX::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture, reset, settings.sharpness);
+		FidelityFX::GetSingleton()->Upscale(upscalingTexture, motionVectorsTexture, alphaMaskTexture, reset, settings.sharpness);
 
 	if (upscaleMethod != UpscaleMethod::kFSR && settings.sharpness > 0.0f) {
 		context->CopyResource(inputTextureResource, upscalingTexture->resource.get());
@@ -250,29 +256,21 @@ void Upscaling::CreateUpscalingResources()
 	upscalingTexture->CreateSRV(srvDesc);
 	upscalingTexture->CreateUAV(uavDesc);
 
+	texDesc.Format = DXGI_FORMAT_R16G16_FLOAT;
+	srvDesc.Format = texDesc.Format;
+	uavDesc.Format = texDesc.Format;
+
+	motionVectorsTexture = new Texture2D(texDesc);
+	motionVectorsTexture->CreateSRV(srvDesc);
+	motionVectorsTexture->CreateUAV(uavDesc);
+
 	texDesc.Format = DXGI_FORMAT_R8_UNORM;
 	srvDesc.Format = texDesc.Format;
 	uavDesc.Format = texDesc.Format;
 
-	maskTexture = new Texture2D(texDesc);
-	maskTexture->CreateSRV(srvDesc);
-	maskTexture->CreateUAV(uavDesc);
-
-	texDesc.Width = 1;
-	texDesc.Height = 1;
-
-	texDesc.Format = DXGI_FORMAT_R16_FLOAT;
-	srvDesc.Format = texDesc.Format;
-	uavDesc.Format = texDesc.Format;
-
-	exposureTexture = new Texture2D(texDesc);
-	exposureTexture->CreateSRV(srvDesc);
-	exposureTexture->CreateUAV(uavDesc);
-
-	static auto context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
-
-	float clearColor[4] = { 1, 1, 1, 1 };
-	context->ClearUnorderedAccessViewFloat(exposureTexture->uav.get(), clearColor);
+	alphaMaskTexture = new Texture2D(texDesc);
+	alphaMaskTexture->CreateSRV(srvDesc);
+	alphaMaskTexture->CreateUAV(uavDesc);
 }
 
 void Upscaling::DestroyUpscalingResources()
@@ -282,13 +280,13 @@ void Upscaling::DestroyUpscalingResources()
 	upscalingTexture->resource = nullptr;
 	delete upscalingTexture;
 
-	maskTexture->srv = nullptr;
-	maskTexture->uav = nullptr;
-	maskTexture->resource = nullptr;
-	delete maskTexture;
+	motionVectorsTexture->srv = nullptr;
+	motionVectorsTexture->uav = nullptr;
+	motionVectorsTexture->resource = nullptr;
+	delete motionVectorsTexture;
 
-	exposureTexture->srv = nullptr;
-	exposureTexture->uav = nullptr;
-	exposureTexture->resource = nullptr;
-	delete exposureTexture;
+	alphaMaskTexture->srv = nullptr;
+	alphaMaskTexture->uav = nullptr;
+	alphaMaskTexture->resource = nullptr;
+	delete alphaMaskTexture;
 }

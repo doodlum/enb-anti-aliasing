@@ -19,5 +19,5 @@ public:
 
 	void CreateFSRResources();
 	void DestroyFSRResources();
-	void Upscale(Texture2D* a_color, Texture2D* a_mask, Texture2D* a_exposure, bool a_reset, float a_sharpness);
+	void Upscale(Texture2D* a_color, Texture2D* a_motionVectors, Texture2D* a_alphaMask, bool a_reset, float a_sharpness);
 };

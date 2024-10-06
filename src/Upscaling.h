@@ -57,14 +57,14 @@ public:
 	ID3D11ComputeShader* rcasCS;
 	ID3D11ComputeShader* GetRCASComputeShader();
 
-	ID3D11ComputeShader* encodeMaskCS;
-	ID3D11ComputeShader* GetEncodeMaskComputeShader();
+	ID3D11ComputeShader* encodeTexturesCS;
+	ID3D11ComputeShader* GetEncodeTexturesCS();
 
 	void Upscale();
 
 	Texture2D* upscalingTexture;
-	Texture2D* maskTexture;
-	Texture2D* exposureTexture;
+	Texture2D* motionVectorsTexture;
+	Texture2D* alphaMaskTexture;
 
 	void CreateUpscalingResources();
 	void DestroyUpscalingResources();
