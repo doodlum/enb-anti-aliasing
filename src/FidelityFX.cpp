@@ -63,7 +63,7 @@ void FidelityFX::DestroyFSRResources()
 		logger::critical("[FidelityFX] Failed to destroy FSR3 context!");
 }
 
-void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_mask, Texture2D* a_exposure, float a_sharpness)
+void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_mask, Texture2D* a_exposure, bool a_reset, float a_sharpness)
 {
 	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
 	static auto& depthTexture = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
@@ -104,7 +104,7 @@ void FidelityFX::Upscale(Texture2D* a_color, Texture2D* a_mask, Texture2D* a_exp
 
 		dispatchParameters.cameraFovAngleVertical = Util::GetVerticalFOVRad();
 		dispatchParameters.viewSpaceToMetersFactor = 0.01428222656f;
-		dispatchParameters.reset = false;
+		dispatchParameters.reset = a_reset;
 		dispatchParameters.preExposure = 1.0f;
 
 		dispatchParameters.flags = 0;

@@ -6,13 +6,26 @@
 #include "FidelityFX.h"
 #include "Streamline.h"
 
-class Upscaling
+class Upscaling : public RE::BSTEventSink<RE::MenuOpenCloseEvent>
 {
 public:
 	static Upscaling* GetSingleton()
 	{
 		static Upscaling singleton;
 		return &singleton;
+	}
+
+	bool reset = false;
+
+	virtual RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
+	{
+		if (a_event->menuName == RE::LoadingMenu::MENU_NAME || 
+			a_event->menuName == RE::MapMenu::MENU_NAME ||
+			a_event->menuName == RE::LockpickingMenu::MENU_NAME ||
+			a_event->menuName == RE::MainMenu::MENU_NAME ||
+			a_event->menuName == RE::MistMenu::MENU_NAME)
+			reset = true;
+		return RE::BSEventNotifyControl::kContinue;
 	}
 
 	std::shared_mutex fileLock;

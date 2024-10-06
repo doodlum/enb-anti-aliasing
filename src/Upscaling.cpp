@@ -185,11 +185,11 @@ void Upscaling::Upscale()
 	}
 
 	if (upscaleMethod == UpscaleMethod::kDLSS)
-		Streamline::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture, dlssPreset);
+		Streamline::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture, reset, dlssPreset);
 	else
-		FidelityFX::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture, settings.sharpness);
+		FidelityFX::GetSingleton()->Upscale(upscalingTexture, maskTexture, exposureTexture, reset, settings.sharpness);
 
-	if (upscaleMethod != UpscaleMethod::kFSR && settings.sharpness ) {
+	if (upscaleMethod != UpscaleMethod::kFSR && settings.sharpness > 0.0f) {
 		context->CopyResource(inputTextureResource, upscalingTexture->resource.get());
 
 		{
@@ -217,6 +217,8 @@ void Upscaling::Upscale()
 	}
 
 	context->CopyResource(outputTextureResource, upscalingTexture->resource.get());
+
+	reset = false;
 }
 
 void Upscaling::CreateUpscalingResources()
@@ -235,6 +237,7 @@ void Upscaling::CreateUpscalingResources()
 			.MostDetailedMip = 0,
 			.MipLevels = 1 }
 	};
+
 	D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {
 		.Format = texDesc.Format,
 		.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D,
