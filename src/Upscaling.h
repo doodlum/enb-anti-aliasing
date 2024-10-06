@@ -65,7 +65,6 @@ public:
 	void Upscale();
 
 	Texture2D* upscalingTexture;
-	Texture2D* motionVectorsTexture;
 	Texture2D* alphaMaskTexture;
 
 	void CreateUpscalingResources();

@@ -128,12 +128,13 @@ HRESULT Streamline::CreateDeviceAndSwapChain(IDXGIAdapter* pAdapter,
 	return hr;
 }
 
-void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_motionVectors, Texture2D* a_alphaMask, float2 a_jitter, bool a_reset, sl::DLSSPreset a_preset)
+void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_alphaMask, float2 a_jitter, bool a_reset, sl::DLSSPreset a_preset)
 {
 	UpdateConstants(a_jitter, a_reset);
 
 	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
 	static auto& depthTexture = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
+	static auto& motionVectorsTexture = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGET::kMOTION_VECTOR];
 
 	static auto gameViewport = RE::BSGraphics::State::GetSingleton();
 	static auto context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
@@ -170,7 +171,7 @@ void Streamline::Upscale(Texture2D* a_upscaleTexture, Texture2D* a_motionVectors
 		sl::Resource colorIn = { sl::ResourceType::eTex2d, a_upscaleTexture->resource.get(), 0 };
 		sl::Resource colorOut = { sl::ResourceType::eTex2d, a_upscaleTexture->resource.get(), 0 };
 		sl::Resource depth = { sl::ResourceType::eTex2d, depthTexture.texture, 0 };
-		sl::Resource mvec = { sl::ResourceType::eTex2d, a_motionVectors->resource.get(), 0 };
+		sl::Resource mvec = { sl::ResourceType::eTex2d, motionVectorsTexture.texture, 0 };
 
 		sl::ResourceTag colorInTag = sl::ResourceTag{ &colorIn, sl::kBufferTypeScalingInputColor, sl::ResourceLifecycle::eOnlyValidNow, &fullExtent };
 		sl::ResourceTag colorOutTag = sl::ResourceTag{ &colorOut, sl::kBufferTypeScalingOutputColor, sl::ResourceLifecycle::eOnlyValidNow, &fullExtent };
